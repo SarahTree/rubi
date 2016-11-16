@@ -1,0 +1,268 @@
+#include "dynasm/dasm_proto.h"
+#include "dynasm/dasm_x86.h"
+#include "parser_lib.h"
+
+|.arch x86
+|.globals L_
+|.actionlist rubiactions
+
+dasm_State* d;
+static dasm_State** Dst = &d;
+
+void* rubilabels[L__MAX];
+
+void dynasm_init_jit(){
+    dasm_init(&d, 1);
+    dasm_setupglobal(&d, rubilabels, L__MAX);
+    dasm_setup(&d, rubiactions);
+}
+
+int dasm_getpclabel_jit(int espBgn){
+    return dasm_getpclabel(&d, espBgn);
+}
+
+void dynasm_link_jit(void *jit_sz){
+    dasm_link(&d,jit_sz);
+}
+
+void dynasm_encode_jit(void *jit_buf){
+    dasm_encode(&d, jit_buf);
+}
+
+void dynasm_growpc_jit(size_t npc){
+    dasm_growpc(&d, npc);
+}
+
+void dasm_free_jit(){
+    dasm_free(&d);
+}
+
+void* dynasm_get_start_entry(){
+    return rubilabels[L_START];
+}
+
+void d_make_break(size_t lbl){
+    | jmp =>lbl
+}
+
+void d_make_return(size_t lbl){
+    | jmp =>lbl
+}
+
+void d_make_ifStmt(size_t end){
+    // didn't simply 'jz =>end' to prevent address diff too large
+    | test eax, eax
+    | jnz >1
+    | jmp =>end
+    |1:
+}
+
+void d_whileStmt_1(size_t loopBgn){
+    |=>loopBgn:
+}
+
+void d_whileStmt_2(size_t end){
+    | test eax, eax
+    | jnz >1
+    | jmp =>end
+    |1:
+}
+
+void d_whileStmt_3(size_t loopBgn,size_t end){
+    | jmp =>loopBgn
+    |=>end:
+
+}
+
+void d_whileStmt_4(size_t addr){
+
+    |=>addr:
+}
+
+void d_functionStmt_1(size_t func_addr,size_t func_esp){
+    |=>func_addr:
+    | push ebp
+    | mov ebp, esp
+    | sub esp, 0x80000000
+    |=>func_esp:
+}
+
+void d_functionStmt_2(size_t argsc){
+    for(int i = 0; i < argsc; i++) {
+        | mov eax, [ebp + ((argsc - i - 1) * sizeof(int32_t) + 8)]
+        | mov [ebp - (i + 2)*4], eax
+    }
+}
+
+void d_functionStmt_3(size_t addr){
+
+    |=>addr:
+}
+
+void d_functionStmt_4(){
+    | leave
+    | ret
+}
+
+void d_expression_1(size_t mainAddress,size_t mainEsp){
+    |=>mainAddress:
+    | push ebp
+    | mov ebp, esp
+    | sub esp, 0x80000000
+    |=>mainEsp:
+    | mov esi, [ebp + 12]
+
+}
+
+void d_expression_2(){
+    | leave
+    | ret
+}
+
+void d_expression_3(char* str){
+    // mov eax string_address
+    | mov eax, str
+}
+
+void d_expression_4(){
+    | push eax
+}
+
+void d_expression_5(){
+    | call dword [esi + 4]
+}
+void d_expression_6(){
+    | call dword [esi]
+}
+
+void d_expression_7(){
+    | add esp, 4
+}
+void d_expression_8(){
+    | call dword [esi + 0x8]
+}
+void d_expression_9(char* str){
+    // mov eax string_address
+    | mov eax, str
+    | mov [esp], eax
+}
+void d_expression_10(size_t a){
+    | mov [esp + a], eax
+}
+void d_expression_11(size_t pos,size_t end){
+    // jmp if/elsif/while end
+    | jmp =>end
+    |=>pos:
+}
+void d_expression_12(size_t pos,size_t endif){
+    // jmp if/elsif/while end
+    | jmp =>endif
+    |=>pos:
+
+}
+void d_expression_13(size_t end){
+    | test eax, eax
+    | jnz >1
+    | jmp =>end
+    |1:
+}
+void d_expression_14(size_t pos){
+    |=>pos:
+}
+void d_expression_15(size_t endif){
+    |=>endif:
+}
+
+void d_expression_16(){
+    | call dword [esi + 0x14]
+}
+
+void d_assignment_1(){
+    | push eax
+}
+
+void d_assignment_2(size_t siz,unsigned int id){
+    // mov ecx, array
+    | mov ecx, [ebp - siz*id]
+    | pop edx
+}
+
+void d_assignment_3(){
+    | mov [ecx+edx*4], eax
+}
+
+void d_assignment_4(){
+    | mov [ecx+edx], eax
+}
+
+void d_assignment_5(size_t siz,unsigned int id){
+    // mov eax, varaible
+    | mov eax, [ebp - siz*id]
+    | push eax
+}
+
+void d_assignment_6(){
+    | inc eax
+}
+
+void d_assignment_7(){
+    | dec eax
+}
+
+void d_assignment_8(size_t siz,unsigned int id){
+    // mov variable, eax
+    | mov [ebp - siz*id], eax
+}
+
+void d_assignment_9(){
+    | pop eax
+}
+
+void d_assignment_10(){
+    | push eax
+}
+
+void d_assignment_11(unsigned int id){
+    // mov ecx GLOBAL_ADDR
+    | mov ecx, [id]
+    | pop edx
+}
+void d_assignment_12(){
+    | mov [ecx + edx*4], eax
+}
+
+void d_assignment_13(){
+    | mov [edx+edx], eax
+}
+
+void d_assignment_14(unsigned int id){
+    | mov [id], eax
+}
+
+void d_assignment_15(unsigned int id){
+    // mov eax GLOBAL_ADDR
+    | mov eax, [id]
+    | push eax
+}
+
+void d_assignment_16(){
+    | inc eax
+}
+
+void d_assignment_17(){
+    | dec eax
+}
+
+void d_assignment_18(unsigned int id){
+    // mov GLOBAL_ADDR eax
+    | mov [id], eax
+}
+
+void d_assignment_19(){
+    | pop eax
+}
+
+void d_parser_1(size_t mainAddr){
+    |->START:
+    | jmp =>mainAddr
+}
