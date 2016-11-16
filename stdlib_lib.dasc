@@ -1,0 +1,18 @@
+	void d_make_stdfunc_1()
+	{
+		| shl eax, 2
+		| mov [esp], eax
+		| call dword [esi + 12]
+		| push eax
+		| mov [esp], eax
+		| call dword [esi + 24]
+		| pop eax
+	}			
+
+	void d_make_stdfunc_2(uint32_t a){
+		| mov [esp + a], eax
+	}
+
+	void d_make_stdfunc_3(uint32_t stdfunc_addr){
+		| call dword [esi + stdfunc_addr]
+	}

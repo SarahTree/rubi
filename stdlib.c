@@ -1,5 +1,6 @@
 #include <string.h>
 #include "expr.h"
+#include "codegen.h"
 
 typedef struct {
     char *name;
@@ -19,30 +20,24 @@ int make_stdfunc(char *name)
         if (!strcmp(stdfunc[i].name, name)) {
             if(!strcmp(name, "Array")) {
                 compExpr(); // get array size
-                | shl eax, 2
-                | mov [esp], eax
-                | call dword [esi + 12]
-                | push eax
-                | mov [esp], eax
-                | call dword [esi + 24]
-                | pop eax
+                	d_make_stdfunc_1();
             } else {
                 if (stdfunc[i].args == -1) { // vector
                     uint32_t a = 0;
                     do {
                         compExpr();
-                        | mov [esp + a], eax
+                        d_make_stdfunc_2(a);
                         a += 4;
                     } while(skip(","));
                 } else {
                     for(int arg = 0; arg < stdfunc[i].args; arg++) {
                         compExpr();
-                        | mov [esp + arg*4], eax
+                        d_make_stdfunc_2(arg*4);
                         skip(",");
                     }
                 }
                 // call $function
-                | call dword [esi + stdfunc[i].addr]
+                d_make_stdfunc_3(stdfunc[i].addr);
             }
             return 1;
         }
