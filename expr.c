@@ -5,6 +5,7 @@
 #include "expr.h"
 #include "rubi.h"
 #include "parser.h"
+#include "codegen.h"
 
 extern int make_stdfunc(char *);
 
@@ -13,13 +14,16 @@ static inline int32_t isIndex() { return !strcmp(tok.tok[tok.pos].val, "["); }
 static void primExpr()
 {
     if (isdigit(tok.tok[tok.pos].val[0])) { // number?
-        | mov eax, atoi(tok.tok[tok.pos++].val)
+		d_expr_prim1();
+        //| mov eax, atoi(tok.tok[tok.pos++].val)
     } else if (skip("'")) { // char?
-        | mov eax, tok.tok[tok.pos++].val[0]
+		d_expr_prim2();
+        //| mov eax, tok.tok[tok.pos++].val[0]
         skip("'");
     } else if (skip("\"")) { // string?
         // mov eax string_address
-        | mov eax, getString()
+		d_expr_prim3();
+        //| mov eax, getString()
     } else if (isalpha(tok.tok[tok.pos].val[0])) { // variable or inc or dec
         char *name = tok.tok[tok.pos].val;
         Variable *v;
@@ -32,19 +36,24 @@ static void primExpr()
                     error("%d: '%s' was not declared",
                           tok.tok[tok.pos].nline, name);
                 compExpr();
-                | mov ecx, eax
+				d_expr_prim4();
+                //| mov ecx, eax
 
                 if (v->loctype == V_LOCAL) {
-                    | mov edx, [ebp - v->id*4]
+					d_expr_prim5(v);
+                    //| mov edx, [ebp - v->id*4]
                 } else if (v->loctype == V_GLOBAL) {
                     // mov edx, GLOBAL_ADDR
-                    | mov edx, [v->id]
+					d_expr_prim6(v);
+                    //| mov edx, [v->id]
                 }
 
                 if (v->type == T_INT) {
-                    | mov eax, [edx + ecx * 4]
+					d_expr_prim7();
+                    //| mov eax, [edx + ecx * 4]
                 } else {
-                    | movzx eax, byte [edx + ecx]
+					d_expr_prim8();
+                    //| movzx eax, byte [edx + ecx]
                 }
 
                 if (!skip("]"))
@@ -58,13 +67,15 @@ static void primExpr()
                         !strcmp(val, "\"") || !strcmp(val, "(")) { // has arg?
                         for (int i = 0; i < function->args; i++) {
                             compExpr();
-                            | push eax
+							d_expr_prim9();
+                            //| push eax
                             skip(",");
                         }
                     }
                     // call func
-                    | call =>function->address
-                    | add esp, function->args * sizeof(int32_t)
+					d_expr_prim10(function);
+                    //| call =>function->address
+                    //| add esp, function->args * sizeof(int32_t)
                 }
                 if (!skip(")"))
                     error("func: %d: expected expression ')'",
@@ -75,10 +86,12 @@ static void primExpr()
                           tok.tok[tok.pos].nline, name);
                 if (v->loctype == V_LOCAL) {
                     // mov eax variable
-                    | mov eax, [ebp - v->id*4]
+					d_expr_prim11(v);
+                    //| mov eax, [ebp - v->id*4]
                 } else if (v->loctype == V_GLOBAL) {
                     // mov eax GLOBAL_ADDR
-                    | mov eax, [v->id]
+					d_expr_prim12(v);
+                    //| mov eax, [v->id]
                 }
             }
         }
@@ -89,11 +102,12 @@ static void primExpr()
     }
 
     while (isIndex()) {
-        | mov ecx, eax
-        skip("[");
-        compExpr();
-        skip("]");
-        | mov eax, [ecx + eax*4]
+	d_expr_prim13();
+        //| mov ecx, eax
+        //skip("[");
+        //compExpr();
+        //skip("]");
+        //| mov eax, [ecx + eax*4]
     }
 }
 
@@ -102,20 +116,22 @@ static void mulDivExpr()
     int32_t mul = 0, div = 0;
     primExpr();
     while ((mul = skip("*")) || (div = skip("/")) || skip("%")) {
-        | push eax
+		d_expr_mulDiv1();
+        //| push eax
         primExpr();
-        | mov ebx, eax
+		d_expr_mulDiv2(mul,div);
+    /*    | mov ebx, eax
         | pop eax
         if (mul) {
             | imul ebx
         } else if (div) {
             | xor edx, edx
             | idiv ebx
-        } else { /* mod */
+        } else { // mod 
             | xor edx, edx
             | idiv ebx
             | mov eax, edx
-        }
+        }*/
     }
 }
 
@@ -124,15 +140,17 @@ static void addSubExpr()
     int32_t add;
     mulDivExpr();
     while ((add = skip("+")) || skip("-")) {
-        | push eax
+		d_expr_addsub1();
+        //| push eax
         mulDivExpr();
-        | mov ebx, eax
+ 		d_expr_addsub2(add);
+    /*    | mov ebx, eax
         | pop eax
         if (add) {
             | add eax, ebx
         } else {
             | sub eax, ebx
-        }
+        }*/
     }
 }
 
@@ -140,11 +158,14 @@ static void logicExpr()
 {
     int32_t lt = 0, gt = 0, ne = 0, eql = 0, fle = 0;
     addSubExpr();
+	
     if ((lt = skip("<")) || (gt = skip(">")) || (ne = skip("!=")) ||
         (eql = skip("==")) || (fle = skip("<=")) || skip(">=")) {
-        | push eax
+		d_expr_logic1();
+        //| push eax
         addSubExpr();
-        | mov ebx, eax
+		d_expr_logic2(lt,gt,ne,eql,fle);
+        /*| mov ebx, eax
         | pop eax
         | cmp eax, ebx
         if (lt)
@@ -161,6 +182,7 @@ static void logicExpr()
             | setge al
 
         | movzx eax, al
+		*/
     }
 }
 
@@ -168,11 +190,14 @@ void compExpr()
 {
     int and = 0, or = 0;
     logicExpr();
+
     while ((and = skip("and") || skip("&")) ||
            (or = skip("or") || skip("|")) || (skip("xor") || skip("^"))) {
-        | push eax
+	d_expr_com1();
+    //    | push eax
         logicExpr();
-        | mov ebx, eax
+	d_expr_com2(and,or);
+    /*    | mov ebx, eax
         | pop eax
         if (and)
             | and eax, ebx
@@ -180,5 +205,6 @@ void compExpr()
             | or eax, ebx
         else
             | xor eax, ebx
+	*/
     }
 }
