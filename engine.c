@@ -49,7 +49,7 @@ void dispose()
 #ifdef _WIN32
     VirtualFree(jit_buf, 0, MEM_RELEASE);
 #else
-    munmap(jit_buf, jit_sz);
+    //munmap(jit_buf, jit_sz);
 #endif
     free(brks.addr);
     free(rets.addr);
@@ -89,7 +89,7 @@ static int execute(char *source)
 
     int (*jit_main)(int*, void**) = parser();
 
-    jit_main(0, funcTable);
+    //jit_main(0, funcTable);
 
     dispose();
     return 0;
